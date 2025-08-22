@@ -1,0 +1,735 @@
+---
+title: "Heart Disease Statistical Analysis"
+author: "Grace Pender"
+subtitle: 
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r setup, include="FALSE"}
+
+install_packages <- function(pkg) { 
+  
+  # Install package if it is not already
+  if (!(pkg %in% installed.packages()[, "Package"])){ 
+    
+    install.packages(pkg, repos='http://cran.us.r-project.org')
+  }
+  
+  library(pkg, character.only = TRUE)
+  
+} # end installPackages()
+
+#Load necessary packages
+pkg_list = c("tidyverse", "pastecs", "FSA", "semTools", "VIM", "car", "gtsummary", "gt", "dplyr", "multcompView", "ggpubr", "rstatix")
+
+
+lapply(pkg_list, install_packages)
+
+#set working directory
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+#display working directory
+getwd()
+```
+# 1. Introduction
+
+<p> This statistical analysis aims to investigate the biological factors that influence the development of heart disease, and the symptoms that can be indicative or predictive of heart disease development. In order to be able to accurately and preemptively predict heart disease in patients, a clear understanding of the physiological attributes that contribute to the development of heart disease is necessary. Further, understanding how these various traits can interact, influence, or correlate with each other can contribute to our understanding of the biological mechanisms that underlie blood vessel damage, and heart disease development. Attributes such as cholesterol level, blood pressure, blood sugar, age, heart rate, and and chest pain have all been implicated in some form with heart disease, but investigation is needed to determine if they are truly associated with the onset of heart disease, and if the incidences of these traits are correlated.
+
+<p> The dataset used in this analysis contains data from 303 individuals' data from the Cleveland Clinic (Janosi, Andras, et al., 1989). Data was collected from patients referred to the Cleveland Clinic for coronary angiography between May 1981 and September 1984 by Robert Detrano, M.D., Ph.D of the Cleveland Clinic Foundation. The dataset contains 14 columns, from a larger set of 75 variables, which represent 13 different physiological attributes obtained from patients, and the final variable indicating the presence or absence of heart disease, called the "target" variable.
+
+</p> The variables included in this dataset are as follows: age, sex, chest pain, blood pressure at rest, serum cholesterol, resting electrocardiogram, fasting blood sugar, maximum heart rate, oldpeak, slope, exercise induced angina, thallium heart rate test result, and target (which indicates the presence or absence of heart disease). 
+
+</p> Details of the variables are included in Table 1.
+
+| Variable name           | Details     | Variable Type |
+|-------------------|-------------------------------|---------------|
+|age   |   Patient age in years    |   Numeric, ratio   |
+|sex  | Patient biological sex (Female:0; Male:1)   | Nominal, binary |
+|cp| Type of chest pain experience by the patient (0: typical angina; 1: atypical angina; 2: non-anginal pain; 3: asymptomatic)| Nominal|
+|trestbps| Patient resting blood pressure (mm/Hg)|  Numeric, ratio| 
+|chol| Serum cholesterol (mg/dl)| Numeric, ratio|
+|fbs| Fasting blood sugar > 120 mg/dl (0: False; 1: True)| Nominal, binary|
+|restecg| Resting electrocardiographic results (0: normal; 1: ST-wave abnormality; 2: probable or definite left ventricular hypertrophy)| Nominal|
+|thalach| Maximum heart rate achieved (bpm)| Numeric, ratio|
+|exang| Exercise induced angina (0: no angina; 1: angina present)| Nominal, binary|
+|oldpeak|Stress test depression induced by exercise relative to rest|Numeric, ratio|
+|slope|The slope of the peak exercise ST segment (0 = upsloping; 1: flat; 2: downsloping|Nominal|
+|ca|Number of major vessels coloured by fluoroscopy (0-3)|Ordinal|
+|thal|Thallium heart rate test results (1: normal blood flow; 2: fixed defect (no blood flow in some part of the heart); 3: reversible defect (abnormal blood flow)|Nominal|
+|target| Indicates the presence of heart disease (0: no disease; 1: heart disease present)|Nominal, binary|
+
+<p align="center">**Table 1: Heart disease variables**<p>
+
+<p>
+
+In order to investigate the physiological factors contributing to, and associated with, heart disease, a series of hypothesis tests were conducted.
+<p>
+The following hypotheses were investigated:
+
+
+| Pair | Null Hypothesis (H0)                                                                                                                                                              | Alternative Hypothesis (Ha)                                                                                                                                                 |
+|------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1    |There is no relationship between a patient's age and their resting blood pressure. | There is a relationship between a patient's age and their resting blood pressure.|
+| 2    | There is no relationship between a patient's serum cholesterol level and the maximum heart rate they achieve.| There is a relationship between a patient's serum cholesterol level and the maximum heart rate they achieve.|
+| 3    | There is no difference in serum cholesterol level between patients who have heart disease and patients who do not. | There is a difference in serum cholesterol level between patients who have heart disease and patients who do not.|
+| 4    | There are no differences in resting blood pressure between patients with different types of chest pain. | There are differences in resting blood pressure between patients with different types of chest pain.|
+| 5    | There is no relationship between a patient's thallium heart rate test results and the presence of heart disease.| There is a relationship between a patient's thallium heart rate test results and the presence of heart disease.|
+
+
+
+
+
+```{r load data, include = FALSE, echo = FALSE}
+#Load data
+heart_disease <- read.csv("heart_disease_dataframe.csv")
+
+#Set column names to lowercase
+colnames(heart_disease) <- tolower(colnames(heart_disease))
+
+#Set necessary variables to factors
+heart_disease$sex <- as.factor(heart_disease$sex)
+heart_disease$cp <- as.factor(heart_disease$cp)
+heart_disease$fbs <- as.factor(heart_disease$fbs)
+heart_disease$restecg <- as.factor(heart_disease$restecg)
+heart_disease$exang<- as.factor(heart_disease$exang)
+heart_disease$ca <- as.factor(heart_disease$ca)
+heart_disease$thal <- as.factor(heart_disease$thal)
+heart_disease$target <- as.factor(heart_disease$target)
+
+#display structure of the data
+str(heart_disease)
+
+
+#Set necessary variables to "NA"
+#for "ca" variable, NA values are denoted in the data as 4, 
+  #since values should only be  0,1,2,3 as specified in the documentation
+#for "thal" variable, NA values are denoted as O since values are from 1-3
+  #as specified in the documentation
+heart_disease <- heart_disease %>%
+  mutate(
+    ca = na_if(ca, "4"),  # Replace "0" with NA in ca column
+    thal = na_if(thal, "0")     # Replace 4 with NA in thal column
+  )
+
+```
+
+</p>
+Prior to conducting statistical testing, the variables of interest were evaluated for the level of missingness, to determine if missing data represented a source of bias (Figure 1). Of all the variables of interest, only the "thal" variable had missing values, with a proportion of 0.007 missing. The proportion of the missing data is very low for the "thal", the sample size of over 300 individuals is high, and as there is no observable pattern to the missing data, according to the recommendation of Tabachnick and Fidell (2016), the missing data does not present a source of bias in the analysis.
+<p>
+
+```{r missing, echo= FALSE, fig.cap="<center><b>Figure 1: Inspection of Missing Data</b></center>"}
+varsint<-c("age", "cp", "trestbps", "chol", "thalach","target", "thal")
+sdatasubset<-heart_disease[varsint] #create a subset of data with variables of interest
+res<-summary(VIM::aggr(sdatasubset, sortVar=TRUE, combined=FALSE))$combinations
+```
+
+<p>In order to determine the correct statistical test for each hypothesis, the data for each variable of inspected. Whether or not each variable could be considered to approximate a normal distribution was assessed, and consequently the appropriate statistical test was chosen. 
+<p>**Section 2** summarises the results of the tests conducted to determine which statistical test was appropriate for the data, and then presents the results of the hypothesis tests. The conclusions drawn for each hypothesis test are presented in **Section 3**. 
+
+# 2. Hypotheses
+
+## 2.1 Relationship between patient age and resting blood pressure. 
+
+**H0**: There is no relationship between a patient's age and their resting blood pressure (trestbps). 
+
+**HA**: There is a relationship between a patient's age and their resting blood pressure.
+
+### 2.1.1 Inspecting age and trestbps
+
+```{r hypothesis 1 normality tests, echo = FALSE, include= FALSE}
+#Create a histogram
+gg_age <- ggplot(heart_disease, aes(x=age)) 
+#Label x axis
+gg_age <- gg_age + labs(x="Patient age")
+#assign colours and binwidths
+gg_age <- gg_age + geom_histogram(binwidth=3, colour="black", aes(y=..density.., fill=..count..))
+gg_age <- gg_age + scale_fill_gradient("Count", low="#DCDCDC", high="#7C7C7C")
+#Add a density curve
+gg_age <- gg_age + stat_function(fun=dnorm, color="firebrick",args=list(mean=mean(heart_disease$age, na.rm=TRUE), sd=sd(heart_disease$age, na.rm=TRUE)))+
+  theme_minimal()
+
+#Create qqplot
+qqnorm(heart_disease$age, main="Figure 2: QQ Plot for Total Perception of Control") 
+qqline(heart_disease$age, col=2)
+
+#compute skewness and kurtosis stadardised scores
+ageskew<-semTools::skew(heart_disease$age)
+agekurt<-semTools::kurtosis(heart_disease$age)
+ageskew[1]/ageskew[2]
+agekurt[1]/agekurt[2]
+
+
+```
+The age variable was tested for normality. Visual inspection of the the histogram shows that the data does approximate a normal distribution when plotted, with no apparent skewness or kurtosis (Figure 2). The qqplot for age also does not indicate substantial skewness in the data (Figure 3). Finally, standardised scores for both kurtosis and skewness were calculated. The score for kurtosis (`r round(agekurt[1]/agekurt[2], 2)`) and the score for skewness (`r round(ageskew[1]/ageskew[2], 2)`) were both within the acceptable range of +/- 2 proposed by Curran, West, and Finch (1996). No further testing was conducted, as the histogram, qqplot, and skewness and kurtosis standardised scores indicate that the age variable approximates a normal distribution.
+
+```{r age_gg, fig.cap="<center><b>Figure 2: Histogram for Patient Age</b></center>", echo=FALSE, warning=FALSE}
+gg_age
+```
+```{r age_qq, fig.cap="<center><b>Figure 3: QQPlot for Patient Age</b></center>", echo=FALSE, warning=FALSE}
+qqnorm(heart_disease$age) 
+
+qplot=qqline(heart_disease$age, col=2) #show a line on the plot
+```
+```{r hist-tresbp, include=FALSE, warning=FALSE}
+#Create a histogram
+gg_bp <- ggplot(heart_disease, aes(x=trestbps)) 
+#Label x axis
+gg_bp <- gg_bp + labs(x="Patient resting blood pressure")
+#Assign colour and binwidth
+gg_bp <- gg_bp + geom_histogram(binwidth=5, colour="black", aes(y=..density.., fill=..count..))
+gg_bp <- gg_bp + scale_fill_gradient("Count", low="#DCDCDC", high="#7C7C7C")
+#Add density curve
+gg_bp <- gg_bp + stat_function(fun=dnorm, color="firebrick",args=list(mean=mean(heart_disease$trestbps, na.rm=TRUE), sd=sd(heart_disease$trestbps, na.rm=TRUE)))+
+  theme_minimal()
+
+#Create qqplot
+qqnorm(heart_disease$trestbps, main="QQ Plot for Patient resting blood pressure") 
+qqline(heart_disease$trestbps, col=2) #show a line on the plot
+
+
+#Conpute skewness and kurtosis standardised scores
+trestbpskew<-semTools::skew(heart_disease$trestbps)
+trestbpkurt<-semTools::kurtosis(heart_disease$trestbps)
+trestbpskew[1]/trestbpskew[2]
+trestbpkurt[1]/trestbpkurt[2]
+
+
+#Calculate the percentage of standardised scores outside acceptable limits
+ztrestbps<- abs(scale(heart_disease$trestbps))
+
+
+trestbp_1.96 <-  FSA::perc(as.numeric(ztrestbps), 1.96, "gt")
+
+trestbp_3.29 <-FSA::perc(as.numeric(ztrestbps), 3.29, "gt")
+
+trestbp_1.96 
+trestbp_3.29
+```
+
+The resting blood pressure (trestbps) variable was tested for normality. Visual inspection of the the histogram (Figure 4) and qqplot (Figure 5) indicate that there is a right skew present in the data. Subsequently, standardised scores for both kurtosis and skewness were calculated. The score for kurtosis (`r round(trestbpkurt[1]/trestbpkurt[2], 2)`) and the score for skewness (`r round(trestbpskew[1]/trestbpskew[2], 2)`) were both outside the acceptable range of +/- 2 proposed by Curran, West, and Finch (1996). However, over 95% of the standardised scores fall within the range of +/-1.96 (`r round(trestbp_1.96,2)`% falls outside +/-1.96), and over 99% of standardised scores fall within the bounds of +/- 3.29 (`r round(trestbp_3.29,2)`% falls outside +/-3.29), using the guidance of Field, Miles and Field (2013), the data is therefore considered to approximate a normal distribution (m=`r round(mean(heart_disease$trestbps, na.rm=TRUE),2)`, sd=`r round(sd(heart_disease$trestbps, na.rm=TRUE),2)`, n=`r length(heart_disease$trestbps)-sum(is.na(heart_disease$trestbps))`).
+
+
+```{r fig.cap="<center><b>Figure 4: Histogram for Patient resting blood pressure</b></center>", echo=FALSE, warning=FALSE}
+gg_bp
+```
+
+```{r, fig.cap="<center><b>Figure 5: QQPlot for Patient resting blood pressure </b></center>", echo=FALSE, warning=FALSE}
+qqnorm(heart_disease$trestbps) 
+
+qplot=qqline(heart_disease$trestbps, col=2) #show a line on the plot
+```
+
+Given that the data for both age and resting blood pressure can be considered approximately normal, a Pearson's correlation test was used to test the hypothesis that there is a relationship between age and resting blood pressure.
+
+### 2.1.2 Testing hypothesis 1
+
+```{r hypothesis 1 tests, include = FALSE, echo = FALSE}
+# Conduct Pearson's Correlation test
+corstat_1=stats::cor.test( heart_disease$age,heart_disease$trestbps, method='pearson')
+corstat_1
+
+```
+The relationship between patient age and patient resting blood pressure (trestbps) was investigated using Pearson's correlation test. A small, or "weak", but statistically significant positive correlation was found (r = `r round(as.numeric(corstat_1[4]),2)`, n = `r as.numeric(corstat_1[2])`, p<.001).  The relationship between the two variables is shown in Figure 6.
+```{r fig.cap="<center><b>Figure 6: Scatterplot of Patient Age and Resting Blood Pressure (trestbps)</b></center>", echo=FALSE, warning=FALSE}
+#Create a Simple scatterplot 
+
+scatter <- ggplot(heart_disease, aes(x = age, y = trestbps)) + 
+  geom_point() +  
+  geom_smooth(method = "lm", colour = "firebrick", se = FALSE) + 
+  labs(x = "Patient Age (years)", y = "Patient Resting Blood Pressure (mm/Hg)")+
+  theme_minimal()
+
+# Print the plot
+print(scatter)
+```
+
+## 2.2 Relationship between patient's serum cholesterol level and maximum heart rate achieved
+
+**H0**: There is no relationship between a patient’s serum cholesterol level and the maximum heart rate they achieve.	
+**HA**: There is a relationship between a patient’s serum cholesterol level and the maximum heart rate they achieve.
+
+### 2.2.1 Inspecting serum cholesterol (chol) and maximum heart rate (thalach)
+
+```{r hist-chol, include=FALSE, warning=FALSE}
+#Create a histogram
+gg_chol <- ggplot(heart_disease, aes(x=chol)) 
+#Label x axis
+gg_chol<- gg_chol + labs(x="Patient cholesterol (mg/dl)")
+#Assign colours and binwidths
+gg_chol <- gg_chol + geom_histogram(binwidth=10, colour="black", aes(y=..density.., fill=..count..))
+gg_chol <- gg_chol + scale_fill_gradient("Count", low="#DCDCDC", high="#7C7C7C")
+#Add density curve
+gg_chol <- gg_chol + stat_function(fun=dnorm, color="firebrick",args=list(mean=mean(heart_disease$chol, na.rm=TRUE), sd=sd(heart_disease$chol, na.rm=TRUE)))
+
+#Create qqplot
+qqnorm(heart_disease$chol, main="QQ Plot for Patient cholesterol") 
+qqline(heart_disease$chol, col=2) #show a line on the plot
+
+#Compute skewness and kurtosis standardised scores
+cholskew<-semTools::skew(heart_disease$chol)
+cholkurt<-semTools::kurtosis(heart_disease$chol)
+cholskew[1]/cholskew[2]
+cholkurt[1]/cholkurt[2]
+
+
+#Calculate the percentage of standardised scores outside acceptable limits
+zchol<- abs(scale(heart_disease$chol))
+
+
+chol_1.96 <-  FSA::perc(as.numeric(zchol), 1.96, "gt")
+
+chol_3.29 <-FSA::perc(as.numeric(zchol), 3.29, "gt")
+
+```
+
+The serum cholesterol (chol) variable was tested for normality. Visual inspection of the the histogram (Figure 7) and qqplot (Figure 8) indicate that there is kurtosis present, and a right skew in the data. Subsequently, standardised scores for both kurtosis and skewness were calculated. The score for kurtosis (`r round(cholkurt[1]/cholkurt[2], 2)`) and the score for skewness (`r round(cholskew[1]/cholskew[2], 2)`) were both outside the acceptable range of +/- 2 proposed by Curran, West, and Finch (1996). However, over 95% of the standardised scores fall within the range of +/-1.96 (`r round(chol_1.96,2)`% falls outside +/-1.96), and over 99% of standardised scores fall within the bounds of +/- 3.29 (`r round(chol_3.29,2)`% falls outside +/-3.29), using the guidance of Field, Miles and Field (2013), the data is therefore considered to approximate a normal distribution (m=`r round(mean(heart_disease$chol, na.rm=TRUE),2)`, sd=`r round(sd(heart_disease$chol, na.rm=TRUE),2)`, n=`r length(heart_disease$chol)-sum(is.na(heart_disease$chol))`). 
+
+
+
+```{r fig.cap="<center><b>Figure 7: Histogram for Patient serum cholesterol</b></center>", echo=FALSE, warning=FALSE}
+gg_chol
+```
+
+```{r, fig.cap="<center><b>Figure 8: QQPlot for Patient serum cholesterol </b></center>", echo=FALSE, warning=FALSE}
+qqnorm(heart_disease$chol) 
+
+qplot=qqline(heart_disease$chol, col=2) #show a line on the plot
+```
+
+```{r remove outlier, echo =FALSE, include=FALSE}
+# Replace 564 with NA in the chol column
+heart_disease$chol[heart_disease$chol == 564] <- NA
+
+```
+The skewness in the data appears to be attributed to a single outlying value, as seen in the histogram (Figure 7). In order to minimise the influence of the outlier in the cholesterol variable (which has a value of 564 mg/dl, over 100 mg/dl higher than the next highest value) on future analyses, this value was removed. 
+```{r hist-thalach, include=FALSE, warning=FALSE}
+
+#Create a histogram
+gg_thalach <- ggplot(heart_disease, aes(x=thalach)) 
+#Change the label of the x axis
+gg_thalach<- gg_thalach + labs(x="Patient maximum heart rate")
+#manage binwidth and colours
+gg_thalach <- gg_thalach + geom_histogram(binwidth=5, colour="black", aes(y=..density.., fill=..count..))
+gg_thalach <- gg_thalach + scale_fill_gradient("Count", low="#DCDCDC", high="#7C7C7C")
+#Add density curve
+gg_thalach <- gg_thalach + stat_function(fun=dnorm, color="firebrick",args=list(mean=mean(heart_disease$thalach, na.rm=TRUE), sd=sd(heart_disease$thalach, na.rm=TRUE)))
+
+#Creat qqplot
+qqnorm(heart_disease$thalach, main="QQ Plot for Patient chol2esterol") 
+qqline(heart_disease$thalach, col=2) #show a line on the plot
+
+#Compute skewness and kurtosis standardised scores
+thalachskew<-semTools::skew(heart_disease$thalach)
+thalachkurt<-semTools::kurtosis(heart_disease$thalach)
+thalachskew[1]/thalachskew[2]
+thalachkurt[1]/thalachkurt[2]
+
+
+#Calculate the percentage of standardised scores outside acceptable limits
+zthalach<- abs(scale(heart_disease$thalach))
+
+thalach_1.96 <-  FSA::perc(as.numeric(zthalach), 1.96, "gt")
+
+thalach_3.29 <-FSA::perc(as.numeric(zthalach), 3.29, "gt")
+
+thalach_1.96 
+thalach_3.29
+gg_thalach
+```
+
+The maximum heart rate (thalach) variable was tested for normality. Visual inspection of the the histogram (Figure 9) and qqplot (Figure 10) show a slight left skew in the data. Subsequently, standardised scores for both kurtosis and skewness were calculated. The standardised score for kurtosis (`r round(thalachkurt[1]/thalachkurt[2], 2)`) was within the acceptable range of +/-2. However, the standardised score for skewness (`r round(thalachskew[1]/thalachskew[2], 2)`) was outside the acceptable range of +/- 2. However, over 95% of the standardised scores fall within the range of +/-1.96 (`r round(thalach_1.96,2)`% falls outside +/-1.96), and over 99% of standardised scores fall within the bounds of +/- 3.29 (`r round(thalach_3.29,2)`% falls outside +/-3.29), using the guidance of Field, Miles and Field (2013), the data is therefore considered to approximate a normal distribution (m=`r round(mean(heart_disease$thalach, na.rm=TRUE),2)`, sd=`r round(sd(heart_disease$thalach, na.rm=TRUE),2)`, n=`r length(heart_disease$thalach)-sum(is.na(heart_disease$thalach))`). 
+
+
+```{r fig.cap="<center><b>Figure 9: Histogram for Maximum heart rate (bpm)</b></center>", echo=FALSE, warning=FALSE}
+gg_thalach
+```
+
+```{r, fig.cap="<center><b>Figure 10: QQPlot for Maximum heart rate (bpm) </b></center>", echo=FALSE, warning=FALSE}
+qqnorm(heart_disease$thalach) 
+
+qplot=qqline(heart_disease$thalach, col=2) #show a line on the plot
+```
+
+As the data for both serum cholesterol level and maximum heart rate achieved can be considered approximately normal, a Pearson's correlation test was used to test the hypothesis that there is a relationship between serum cholesterol level and maximum heart rate achieved. 
+
+### 2.2.2 Testing Hypothesis 2
+```{r hypothesis 2 tests, include = FALSE, echo = FALSE}
+#Pearson Correlation 
+corstat_2=stats::cor.test( heart_disease$chol,heart_disease$thalach, method='pearson')
+corstat_2
+
+```
+
+
+The relationship between patient age and patient resting blood pressure (trestbps) was investigated using Pearson's correlation test. No significant correlation between the two variables was found (r = `r round(as.numeric(corstat_2[4]),2)`, n = `r as.numeric(corstat_2[2])`, p=0.82).  The relationship between the two variables is shown in Figure 11.
+
+
+```{r  hypothesis 2 scatter, fig.cap="<center><b>Figure 11: Scatterplot of patient maximum heart rate and serum cholesterol</b></center>", echo=FALSE, warning=FALSE}
+#Create a Simple scatterplot 
+
+scatter2 <- ggplot(heart_disease, aes(x = chol, y = thalach)) + 
+  geom_point() +  
+  geom_smooth(method = "lm", colour = "Red", se = FALSE) + 
+  labs(x = "Serum cholesterol (mg/dl)", y = "Maximum heart rate (bpm)")+
+  theme_minimal()
+
+# Print the plot
+print(scatter2)
+```
+
+## 2.3 Difference in serum cholesterol levels (chol) for patients with or without heart disease
+**H0**: There is no difference in serum cholesterol level between patients who have heart disease and patients who do not.	
+**HA**: There is a difference in serum cholesterol level between patients who have heart disease and patients who do not.
+
+### 2.3.1 Inspecting cholesterol and heart disease (target)
+<p> The variable "chol" was inspected in Section 2.2.1, and the distribution was shown to approximate a normal distribution.
+
+138 patients in this sample have heart disease, and 165 do not (Figure 12). There is no missing data in this variable.
+```{r echo =FALSE, include = FALSE}
+
+# Create a table of proportions for the variable 'heart disease'
+target_proportion_table <- table(heart_disease$target) / nrow(heart_disease)
+
+# Create a table of counts for the variable 'heart disease'
+target_count_data <- as.data.frame(table(heart_disease$target))
+colnames(target_count_data) <- c("Heart_Disease_Status", "Count")
+target_count_data$Proportion <- c("0.46", "0.54")
+print(target_count_data)
+
+```
+```{r echo = FALSE, include=FALSE, warning=FALSE}
+# Create the pie chart showing numbers for each group of heart disease status
+target_pie <- ggplot(target_count_data, aes(x = "", y = Count, fill = Heart_Disease_Status)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y") +
+  geom_text(aes(label = Count), 
+            position = position_stack(vjust = 0.5), size = 5) +  # Add count labels in the middle of the slices
+  theme_void() +
+  theme(legend.title = element_blank())+
+  scale_fill_manual(values = c("lightblue", "firebrick"), labels = c("No Disease", "Disease Present"))
+```
+```{r fig.cap="<center><b>Figure 12: Proportions of Patients With and Without Heart Disease</b></center>", echo = FALSE}
+target_pie
+
+```
+
+```{r, echo=FALSE, inclue = FALSE, warning = FALSE}
+#Conduct levene's test for homogeneity of variance
+target_levene <- car::leveneTest(chol ~ as.factor(target), data=heart_disease)
+```
+
+The serum cholesterol level data can be considered to approximate a normal distribution (see section 2.2.1). To assess if there is homogeneity of variance of the cholesterol data for the two groups, those with and without heart disease, Levene's test for homogenetity of variance was conducted. The results from this test (Df = 301, F = 0.72, p = 0.398) indicate that there is homogeneity of variance in the serum cholesterol variable between the two groups, as the p value is greater than 0.05. 
+<p>As the data for serum cholesterol can be considered approximately normal and the heart disease status has two unrelated groups with homogeneous variance an independent t-test was used to test this hypothesis. 
+
+### 2.3.2 Testing hypothesis 3
+
+
+```{r hypothesis 3 t test, include=FALSE, warning=FALSE, echo=FALSE}
+#compute means for cholesterol 
+summary_chol <- heart_disease %>%
+  group_by(target)%>%
+  summarise(Mean = mean(chol, na.rm=T))
+
+
+#create boxplot
+#add means 
+test3_boxplot <- ggplot(data = heart_disease, aes(x = target, y = chol))+
+  geom_boxplot()+
+  geom_jitter(width = 0.25, aes(alpha = 0.5))+
+  geom_point(data = summary_chol, aes(x = target, y = Mean, color = target), size = 4, shape = 17) + 
+  theme_minimal()+
+  xlab("Heart Disease Status")+
+  ylab("Serum cholesterol (mg/dL)")+
+  scale_x_discrete(labels = c("No Disease", "Disease"))+
+  scale_colour_manual(values = c("lightblue", "firebrick"))+
+  theme(legend.position = "none")
+```
+
+```{r fig.cap="<center><b>Figure 13: Serum cholesterol levels in patients with and without heart disease</b></center>", warning = FALSE, echo = FALSE}
+test3_boxplot
+```
+
+```{r test 3 stats, include=FALSE, echo=FALSE, warning=FALSE}
+#Get descriptive statistics by group - output as a matrix
+test_3_matrix <- psych::describeBy(heart_disease$chol, heart_disease$target, mat=TRUE)
+
+test_3_matrix
+#Conduct the t-test
+results_hyp3 <- stats::t.test(chol~target,var.equal=TRUE,data=heart_disease)
+
+#Calculate Cohen's d using function from effectsize package
+effcd=effectsize::t_to_d(t = results_hyp3$statistic, results_hyp3$parameter)
+
+effcd
+
+#Eta squared calculation
+effes=round((results_hyp3$statistic*results_hyp3$statistic)/((results_hyp3$statistic*results_hyp3$statistic)+(results_hyp3$parameter)),3)
+
+effes
+```
+The serum cholesterol levels for patients with and without heart disease are displayed as boxplots, with the mean value indicated by a triangle (Figure 13).
+
+<p>An independent-samples t-test was conducted to compare the serum cholesterol levels for patients with and without heart disease. No significant difference in the serum cholesterol levels was found between the patients without heart disease (M = `r round(test_3_matrix$mean[1], 2)`, SD = `r round(test_3_matrix$sd[1], 2)`, n = 138) and those with heard disease (M= `r round(test_3_matrix$mean[2],2)`, SD = `r round(test_3_matrix$sd[2], 2)`, n = 164 for patients with heart disease), (t(`r results_hyp3$parameter`) =`r round(results_hyp3$statistic, 3)`, p = `r round(results_hyp3$p.value,2)`). The effect size, as measured by Cohen's d was `r round(effcd$d, 3)`, indicating that the difference between the two groups of patients was small (Sullivan & Feinn, 2012), as well as not being statistically significant.
+
+
+
+
+## 2.4 Differences in resting blood pressure in patients with different types of chest pain.
+**H0**: There are no differences in resting blood pressure (trestbps) between patients with different types of chest pain (cp).
+
+**HA**: There are differences in resting blood pressure between patients with different types of chest pain.
+
+### 2.4.1 Inspection of chest pain and trestbps
+
+143 patients experience typical angina type chest pain, 50 experience atypical angina type chest pain, 86 experience non-anginal pain, and 24 experience no chest pain (Figure 14). 
+```{r echo =FALSE, include = FALSE}
+
+# Create a table of proportions for the variable 'chest pain type'
+cp_proportion_table <- table(heart_disease$cp) / nrow(heart_disease)
+
+# Create a table of counts for the variable 'chest pain type'
+cp_count_data <- as.data.frame(table(heart_disease$cp))
+colnames(cp_count_data) <- c("Chest_pain_type", "Count")
+print(cp_count_data)
+
+#Conduct bartlett's test for homogeneity of variance
+cp_bartlett <- stats::bartlett.test(trestbps~ cp, data=heart_disease)
+
+
+#Get descriptive statistics by group - output as a matrix
+cp_desc <- psych::describeBy(heart_disease$trestbps, heart_disease$cp, mat=TRUE)
+
+
+``` 
+```{r summary, echo = FALSE}
+cp_desc
+```
+```{r include=FALSE, warning=FALSE, echo = FALSE}
+# Create the pie chart showing numbers per group of chest pain
+cp_pie <- ggplot(cp_count_data, aes(x = "", y = Count, fill = Chest_pain_type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y") +
+  geom_text(aes(label = Count), 
+            position = position_stack(vjust = 0.5), size = 5) +  # Add count labels in the middle of the slices
+  theme_void() +
+  theme(legend.title = element_blank())+
+  scale_fill_manual(values = c("lightblue", "#f66b60", "darkblue", "firebrick"),
+                    labels = c("Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"))
+```
+
+```{r fig.cap="<center><b>Figure 14: Proportions of Patients With Different Types of Chest Pain</b></center>", echo = FALSE}
+#include pie chart 
+cp_pie
+
+```
+
+The resting blood pressure data can be considered to approximate a normal distribution (see section 2.1.1). To assess if there is homogeneity of variance of the resting blood pressure variable for the four chest pain groups, Barlett's test for homogeneity of variances was conducted. Though the sample sizes for each of the four groups are not equal, the variances between the groups are approximately equal according to the results of Bartlett's test (K-squared = 2.2, df = 3, p = 0.53).
+<p>As the data for resting blood pressure can be considered approximately normal and chest pain has four unrelated groups with homogeneous variance an independent samples ANOVA was used to test this hypothesis, and Tukey's Honest Significant Difference (HSD) test was used as a post-hoc test.
+
+### 2.4.2 Hypothesis test 4
+```{r hypothesis test 4, include=FALSE, echo=FALSE}
+#compute means
+summary_cp <- heart_disease %>%
+  group_by(cp)%>%
+  summarise(Mean = mean(trestbps, na.rm=T))
+
+summary_cp
+
+#anova test
+anova_res <- stats::oneway.test(trestbps ~ cp, data = heart_disease, var.equal = TRUE)
+anova_res
+
+#tukey test
+tukey_res <- rstatix::tukey_hsd(heart_disease, trestbps ~ cp)
+
+tukey_res
+
+#Compute Eta squared
+aneffes=effectsize::effectsize(anova_res)
+aneffes
+
+
+# boxplot 
+# add means
+hyp4_boxplot <- ggplot(data = heart_disease, aes(x = cp, y = trestbps)) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.4, width = 0.2) +  
+  geom_point(data = summary_cp, aes(x = cp, y = Mean, colour = cp), size = 4, shape = 17) +  
+  stat_pvalue_manual(
+    tukey_res,
+    label = "p.adj.signif",  # Use adjusted p-value significance stars
+    xmin = "group1",
+    xmax = "group2",
+    y.position = c(205, 212, 217, 222, 227, 232),  # Adjust positions to avoid overlap
+    tip.length = 0.01,
+    size = 4
+  )+
+  labs(x = "Chest Pain Type", 
+       y = "Resting Blood Pressure (trestbps)") +
+  scale_colour_manual(values = c("lightblue3", "#f66b60", "darkblue", "darkred"))+
+  scale_x_discrete(labels = c("Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"))+
+  theme_minimal()+
+  annotate("text", x = "0", y = 240, label = "ANOVA: p < 0.05", size = 4)+
+  theme(legend.position = "none")
+
+
+```
+
+```{r fig.cap="<center><b>Figure 15: Resting blood pressure of patients with different types of chest pain</b></center>", echo = FALSE}
+hyp4_boxplot
+```
+The resting blood pressure (trestbps) of patients with different types of chest pain are displayed as boxplots, with the mean value indicated by a triangle. Significant differences between pairs of groups are indicated with an asterisk, while the letters "ns" indicate no signficant difference between pairs (Figure 15).
+
+A one-way between-groups analysis of variance (ANOVA) was conducted to explore differences in resting blood pressure between patients experiencing different types of chest pain. Patients were divided into four groups: typical angina, atypical angina, non-anginal pain, and asymptomatic (no pain). The analysis revealed a significant effect of chest pain type on resting blood pressure (F(3,299)=3.39,p=0.0185). The effect size, calculated using eta squared was `r round(aneffes$Eta2,2)`, which indicates a small effect size. 
+
+<p>Post-hoc comparison using the Tukey HSD test indicated that the mean resting blood pressure for asymptomatic patients (M = `r round(cp_desc$mean[4],2)`, SD = `r round(cp_desc$sd[4],2)`) was significantly different from that of patients with both non-anginal pain (M = `r round(cp_desc$mean[3],2)`, SD = `r round(cp_desc$sd[3],2)`), and atypical angina (M = `r round(cp_desc$mean[2],2)`, SD = `r round(cp_desc$sd[2],2)`). No significant differences between other pairs of groups were detected. 
+
+## 2.5 Relationship between a patient's thallium heart rate test results and the presence of heart disease
+
+**H0**: There is no relationship between a patient’s thallium heart rate test results and the presence of heart disease.
+
+**HA**: There is a relationship between a patient’s thallium heart rate test results and the presence of heart disease.
+
+## 2.5.1 Inspection of thallium heart rate test results and target variable 
+Table 2 shows the numbers of patients with and without heart disease, in each category of thallium heart rate test result (1-3).
+```{r include = FALSE, echo = FALSE}
+
+# Remove NA values 
+cleaned_data <- na.omit(heart_disease[, c("thal", "target")])
+
+# Create a summary table using dplyr
+#Include counts for number with and without heart disease grouped by the thal variable
+summary_table <- cleaned_data %>%
+  group_by(thal) %>%
+  summarise(
+    `Heart Disease: YES` = sum(target == "1"),
+    `Heart Disease: NO` = sum(target == "0"),
+    .groups = 'drop'
+  )
+
+summary_table
+
+# Create formatted table to include in report
+gt_table <- summary_table %>%
+  gt() %>%
+  tab_header(title = "Thallium heart rate test results and presence of heart disease") %>%
+  cols_label(thal = "Thal result") %>%
+  fmt_number(columns = everything(), decimals = 0) %>%
+  tab_style(
+    style = list(
+      cell_borders(sides = c("top", "bottom"), color = "black", weight = px(2))
+    ),
+    locations = cells_body(columns = everything())
+  ) %>%
+  tab_options(
+    table.border.top.color = "black",
+    table.border.bottom.color = "black",
+    table.border.bottom.width = px(2),
+    table.border.top.width = px(2),
+    column_labels.border.top.color = "black",
+    column_labels.border.bottom.color = "black",
+    column_labels.border.bottom.width = px(2)
+  )
+
+
+```
+
+```{r fig.cap="<center><b>Figure 16: Cross comparison roportions of Repspondents for each Marital Status Category", echo = FALSE}
+
+#include table in report
+gt_table
+```
+Table 2: Cross comparison proportions of heart disease status for each thallium heart rate test result: 1 = normal blood flow, 2 = fixed defect, 3 = reversible defect.
+
+The observed and expected values for each of the thallium test results for patients with and without heart disease are displayed.
+
+```{r chitest, include = FALSE, echo = FALSE, warning = FALSE}
+
+# Need to drop unused levels 
+levels(cleaned_data$thal)
+cleaned_data$thal <- droplevels(cleaned_data$thal)
+#Create your own contingency table
+
+mytable <- xtabs(~thal+target, data = cleaned_data)
+mytable
+
+
+#You can use the chisq.test function in the stats package to do the test
+#set the flag correct=FALSE as it is not a 2 x 2 table
+ctest<-stats::chisq.test(mytable, correct=FALSE) #chi square test
+
+ctest#will give you the details of the test statistic and p-value
+ctest$expected#expected frequencies
+ctest$observed#observed frequencies
+ctest$p.value
+#Calculate effect sizes
+sjstats::phi(mytable)
+hyp_5_effect=sjstats::cramer(mytable)
+
+hyp_5_effect
+
+# Output the results
+cat("A Chi-Square test for independence indicated a strong, significant association between thallium heart rate test results and status of heart disease in patients χ²(", 
+    df = round(ctest$parameter, 3), 
+    ", n = ", nrow(heart_disease), 
+    ") = ", round(ctest$statistic, 3), 
+    ", p < 0.001", 
+    "). Cramer's V = ", round(hyp_5_effect, 2),".\n")
+
+```
+
+```{r chi expected and observed}
+ctest$expected#expected frequencies
+ctest$observed#observed frequencies
+```
+
+A Chi-Square test for independence indicated a strong, significant association between thallium heart rate test results and status of heart disease in patients χ²(2, n = 303) = 83.79 , p < 0.001), Cramer's V = 0.53 .
+
+# 3. Conclusions
+
+As a result of the investigations conducted in section 2, the following conclusions have been drawn:
+
+1. **Pair 1**  
+    - H0: There is no relationship between a patient's age and their resting blood pressure (trestbps). 
+    - HA: There is a relationship between a patient's age and their resting blood pressure.
+    - **Conclusion**: A small, positve, statistically significant correlation was found between a patient's age and their resting blood pressure. Therefore, there is sufficient evidence to reject the null hypothesis in favour of the alternate hypothesis. Results indicate that increase in patient age is associated with higher blood pressure levels. 
+
+2. **Pair 2**
+    - H0: There is no relationship between a patient’s serum cholesterol level and the maximum heart rate they achieve.
+    - HA: There is a relationship between a patient’s serum cholesterol level and the maximum heart rate they achieve.
+    - **Conclusion**: There is no statistically significant relationship between a patient's serum cholesterol level and the maximum heart rate they achieve. There is not sufficient evidence to reject the null hypothesis in favour of the alternate hypothesis. It appears that there is no association between cholesterol level and  maxiumum heart rate in these patients.
+
+3. **Pair 3**
+    - H0: There is no difference in serum cholesterol level between patients who have heart disease and patients who do not.
+    - HA: There is a difference in serum cholesterol level between patients who have heart disease and patients who do not.
+    - **Conclusion**: No statistically significant difference was found in the serum cholesterol levels for patients with and without heart disease. There is therefore not sufficient evidence to support rejecting the null hypothesis in favour of the alternate hypothesis.
+
+4. **Pair 4**
+    - H0: There are no differences in resting blood pressure (trestbps) between patients with different types of chest pain (cp).
+    - HA: There are differences in resting blood pressure between patients with different types of chest pain.
+    - **Conclusion**: A statistically significant difference in resting blood pressure was found for patients with different types of chest pain. This difference was found to exist between asymptomatic patients and patients with atypical angina, and asymptomatic patients and patients with non-anginal pain. The difference detected, furthermore, was small, as indicated by an eta squared value of 0.03. Therefore, there is evidence to support rejecting the null hypothesis in favour of the alternate hypothesis, but the small effect size indicates that rejecting the null hypothesis should be treated with caution. Further data collection by adding an additional cohort of patients to the data could further clarify the effect chest pain has on patient blood pressure. 
+5. **Pair 5**
+    - H0: There is no relationship between a patient’s thallium heart rate test results and the presence of heart disease.
+    - HA: There is a relationship between a patient’s thallium heart rate test results and the presence of heart disease.
+    - **Conclusion**: A strong positive statistically significant association was found between a patient's thallium heart rate test result and their heart disease status. There is therefore evidence to reject the null hypothesis and the result indicates that patients with patients with heart disease tend to have certain thallium heart rate test results more often than those without heart disease. 
+    
+
+
+
+
+# 4. References
+Brown JC, Gerhardt TE, Kwon E. Risk Factors for Coronary Artery Disease. [Updated 2023 Jan 23]. In: StatPearls [Internet]. Treasure Island (FL): StatPearls Publishing; 2024 Jan-. Available from: https://www.ncbi.nlm.nih.gov/books/NBK554410/ \
+Curran, Patrick J., Stephen G. West, and John F. Finch. (1996). "The robustness of test statistics to nonnormality and specification error in confirmatory factor analysis." Psychological methods 1.1 (1996): 16.\
+Field, A., Field Z. & Miles J.(2012).  Discovering statistics using IBM SPSS statistics. Sage publications limited \
+Janosi, Andras, et al. "Heart Disease." UCI Machine Learning Repository, 1989, https://doi.org/10.24432/C52P4X. \
+Sullivan, G. M., & Feinn, R. (2012). Using Effect Size-or Why the P Value Is Not Enough. Journal of graduate medical education, 4(3), 279–282. https://doi.org/10.4300/JGME-D-12-00156.1 \
+Tabachnik and Fidell, Using Multivariate Statistics, 6th Edition, Pearson.\
