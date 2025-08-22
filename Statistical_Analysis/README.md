@@ -13,7 +13,8 @@ The analysis was written in **R Markdown** and exported as an HTML report.
 ---
 
 ## Project Description
-The Cleveland Heart Disease dataset contains patient information (age, sex, chest pain type, cholesterol, etc.) and a target variable indicating the presence of heart disease.  
+The Cleveland Heart Disease dataset contains patient information (age, sex, chest pain type, cholesterol, etc.) and a target variable indicating the presence of heart disease.
+Dataset source: [UCI Heart Disease Dataset](https://archive.ics.uci.edu/dataset/45/heart+disease)
 
 This project includes:
 - Data cleaning and preprocessing  
