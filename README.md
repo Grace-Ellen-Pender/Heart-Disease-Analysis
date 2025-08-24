@@ -15,12 +15,20 @@ This project explores the **Cleveland Clinic Heart Disease dataset** using R and
 The Cleveland Heart Disease dataset contains patient information (age, sex, chest pain type, cholesterol, etc.) and a target variable indicating the presence of heart disease.
 Dataset source: [UCI Heart Disease Dataset](https://archive.ics.uci.edu/dataset/45/heart+disease)
 
-This project includes:
-- Data cleaning and preprocessing  
-- Descriptive statistics  
-- Visualisation of key variables  
-- Statistical testing for associations with heart disease
--  Machine learning model training for predictive analysis
+This project takes two approaches to investigate the factors influence the development of coronary heart disease:
+## 1. Statistical Analysis (R)
+- Performed data inspection and cleaning  
+- Tested for normality  
+- Conducted **t-tests** for pairwise comparisons  
+- Applied **ANOVA** with post-hoc tests  
+- Measured associations using **Pearson's correlation**
+
+### 2. Machine Learning Predictive Analysis (Python, scikit-learn)
+- Performed data inspection and cleaning  
+- Assessed feature importance using **information gain**
+- Applied preprocessing: **one-hot encoding** for categorical features, **scaling** for numerical features  
+- Built pipelines for multiple models: Logistic Regression, Naive Bayes, Random Forest, kNN  
+- Evaluated models using **accuracy, precision, recall, F1 score, and ROC-AUC**
 
 ## View Reports
 
